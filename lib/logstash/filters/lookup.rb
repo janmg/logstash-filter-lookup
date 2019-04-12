@@ -1,17 +1,14 @@
 # encoding: utf-8
-require "logstash/filters/base"
-require "redis"
-require "json"
-require "net/http"
+require 'logstash/filters/base'
+require 'redis'
+require 'json'
+require 'net/http'
+require 'connection_pool'
+require 'addressable/uri'
 
-# This  filter will replace the contents of the default
-# message field with whatever you specify in the configuration.
-#
-# It is only intended to be used as an .
 class LogStash::Filters::Lookup < LogStash::Filters::Base
 
-  # Setting the config_name here is required. This is how you
-  # configure this filter from your Logstash config.
+  # This is how you configure this filter from your Logstash config.
   # [source,ruby]
   # ----------------------------------
   # filter {
@@ -32,7 +29,9 @@ class LogStash::Filters::Lookup < LogStash::Filters::Base
   config :fields, :validate => :array, :required => true, :default => ["ClientIP"]
   # {"ip":"8.8.8.8","netname":"Google","subnet":"8.8.8.0\/24","hostname":"google-public-dns-a.google.com"}
   # In the query parameter has the <ip> tag will be replaced by the IP address to lookup, other parameters are optional and according to your lookup service. 
-  config :lookup, :validate => :string, :required => false, :default => "http://127.0.0.1/ripe.php?ip=<item>&TOKEN=token"
+  config :destinations, :validate => :array, :required => false
+
+  config :lookup, :validate => :string, :required => false, :default => "http://localhost/ripe.php?ip=<item>&TOKEN=token"
 
   # Optional ruby hash with the key as a string and the value as a string in the form of a JSON object. These key's will not be looked up.
   config :list, :validate => :hash, :required => false
@@ -41,19 +40,51 @@ class LogStash::Filters::Lookup < LogStash::Filters::Base
   config :use_redis, :validate => :boolean, :required => false, :default => false
   config :redis_expiry, :validate => :number, :required => false, :default => 604800 
 
+  HTTP_OPTIONS = {
+      keep_alive_timeout: 300
+  }
+
 public
 def register
-    #if use_redis && !lookup.nil?
-    @red = Redis.new
-    #end
+    if use_redis
+        @red = Redis.new
+    end
+    @uri = Addressable::URI.parse(lookup)
+    @uri.merge!(HTTP_OPTIONS)
+    #@http = Net::HTTP.new(uri.host, uri.port, HTTP_OPTIONS)
+    #@uri.port=80 if (@uri.port.nil? && @uri.scheme=="http")
+    #@uri.port=443 if (@uri.port.nil? && @uri.scheme=="https")
+    @connpool = ConnectionPool.new(size: 2, timeout: 180) { 
+        Net::HTTP.new(@uri.host, @uri.port)
+    }
 end # def register
 
 
 
+#  def initialize(http = nil)
+#    if http
+#      @http = http
+#    else
+#      @http = Net::HTTP.start("", 443, HTTP_OPTIONS)
+#    end
+#  end
+
+  #def fetch(id, file)
+  #  response = @http.request Net::HTTP::Get.new "/gists/#{id}"
+  #  JSON.parse(response.body)["files"][file]["content"]
+  #end
+
+
 def filter(event)
-    fields.each do |field|
-        @logger.info(event.get("["+field+"]"))
-        event.set("["+field+"]", JSON.parse(find(event.get(field).to_s)))
+    fields.each_with_index do |field, index|
+        # @logger.info(event.get("["+field+"]"))
+	x = find(event.get(field).to_s)
+	begin
+            json = JSON.parse(x)
+	rescue JSON::ParserError
+            json = x
+	end    
+        event.set("["+destinations[index]+"]", json)
     end
     # filter_matched should go in the last line of our successful code
     filter_matched(event)
@@ -74,15 +105,28 @@ def find(item)
     unless res.nil?
         return res
     end
-    # Lookup item in webservice and cache in redis
-    #uri = URI.parse(lookup.sub('\<item\>',item))
-    uri = URI.parse("http://10.0.0.5/ripe.php?ip="+item)
-    res = Net::HTTP.get(uri)
+    params = @uri.query_values(Hash)
+    params.each do |key, value|
+        params.merge!sub(key, value, item)
+    end
+    @uri.query_values=(params)
+
+    @logger.info(@uri)
+    @connpool.with do |conn|
+        res = conn.request_get(@uri).read_body
+    end
+    #return res.read_body
     unless @red.nil?
         @red.set(item, res)
         @red.expire(item,redis_expiry)
     end
     return res
+end
+
+private
+def sub(key, value, item)
+    return {key => item} if value=="\<item\>"
+    return {key => value}
 end
 
 end # class LogStash::Filters::Lookup
