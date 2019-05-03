@@ -43,6 +43,7 @@ class LogStash::Filters::Lookup < LogStash::Filters::Base
   config :redis_path, :validate => :string, :required => false
   config :redis_expiry, :validate => :number, :required => false, :default => 604800 
   config :normalize, :validate => :boolean, :required => false, :default => false
+
   HTTP_OPTIONS = {
       keep_alive_timeout: 300
   }
@@ -75,6 +76,15 @@ def register
     #@http = Net::HTTP.new(uri.host, uri.port, HTTP_OPTIONS)
     @uri.port=80 if (@uri.port.nil? && @uri.scheme=="http")
     @uri.port=443 if (@uri.port.nil? && @uri.scheme=="https")
+    # find the key where the value is <item>, otherwise just use the value
+    @params = @uri.query_values(Hash)
+    @params.each do |key, value|
+        if value="\<item\>" 
+            @ip=key
+	    @params.delete(key)
+	    logger.info("the ip key in the uri is #{@ip}")
+        end
+    end
     @connpool = ConnectionPool.new(size: 4, timeout: 180) { 
         Net::HTTP.new(@uri.host, @uri.port)
     }
@@ -126,27 +136,20 @@ def find(item)
             return res
         end
     end
-    params = @uri.query_values(Hash)
-    params.each do |key, value|
-        params.merge!sub(key, value, item)
-    end
 
-    @uri.query_values=(params)
-    # @logger.info(@uri)
+    # find the key where the value is <item>, otherwise just use the value
+    current_uri = @uri
+    current_uri.query_values = @params.merge({@ip => item})
+    #logger.info(@uri.to_s)
     @connpool.with do |conn|
-        res = conn.request_get(@uri).read_body
+        res = conn.request_get(current_uri).read_body
+	#logger.info(res.to_s)
         unless @red.nil?
             @red.set(item, res)
             @red.expire(item,redis_expiry)
         end
     end
     return res
-end
-
-private
-def sub(key, value, item)
-    return {key => item} if value=="\<item\>"
-    return {key => value}
 end
 
 def normalize(event)
