@@ -1,4 +1,4 @@
-:plugin: example
+:plugin: weblookup 
 :type: filter
 // Update header with plugin name
 
