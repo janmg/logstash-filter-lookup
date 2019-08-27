@@ -5,13 +5,6 @@ Gem::Specification.new do |s|
   s.summary       = 'This logstash filter plugin takes one or more fields and enriches with a lookup value from a list, redis cache or webservice'
   s.description   = <<-EOF
  This gem is a Logstash plugin. During filter it takes one or more fields and uses that as input to query additional information. The original purpose is to enrich IP addresses with matching subnet, netname and hostname, but it is generic so that any field can be looked up. The function is similar to the translate filter's dictionary lookup, which supports files and regex. The jdbc_streaming filter plugin is also very useful if the data resides in a database. This plugins features are web based lookups and redis caching, for fast lookups.
- The minimal logstash pipeline configuration would look like this
-> filter {
->   weblookup {
->        fields => ['ClientIP']
->        lookup => "http://127.0.0.1/ripe.php?ip=<item>&TOKEN=token"
->   }
-> }
 EOF
   s.homepage      = 'https://github.com/janmg/logstash-filter-weblookup'
   s.authors       = ['Jan Geertsma']

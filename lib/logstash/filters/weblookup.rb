@@ -42,7 +42,11 @@ class LogStash::Filters::Webookup < LogStash::Filters::Base
   config :use_redis, :validate => :boolean, :required => false, :default => false
   config :redis_path, :validate => :string, :required => false
   config :redis_expiry, :validate => :number, :required => false, :default => 604800 
+
+  # Optional simplify the message by moving a field to be the new root of the message
   config :normalize, :validate => :boolean, :required => false, :default => false
+  config :newroot, :validate => :string, :required => false
+  config :roottostrip, :validate => :string, :required => false
 
   HTTP_OPTIONS = {
       keep_alive_timeout: 300
@@ -68,6 +72,7 @@ def register
             @logger.error("Configuration error, there must be an equal amount of destinations and fields, defaulting to using the field as a root for the new values. e.g. if the lookup is done on the value of [\"ClientIP\"] the destination will be [\"ClientIP\"][\"Key\"]")
             destinations=fields
         end
+        # add case destination is empty to put the result in under the same field 
     end
 
     # http connectionpool
@@ -79,7 +84,7 @@ def register
     # find the key where the value is <item>, otherwise just use the value
     @params = @uri.query_values(Hash)
     @params.each do |key, value|
-        if value="\<item\>" 
+        if value == "\<item\>" 
             @ip=key
 	    @params.delete(key)
 	    logger.info("the ip key in the uri is #{@ip}")
@@ -106,6 +111,9 @@ def filter(event)
             json = parse(event.get(field).to_s)
             event.set("["+destinations[index]+"]", json)
         end
+    end
+    if @normalize
+        replant(event, @newroot)
     end
     # filter_matched should go in the last line of our successful code
     filter_matched(event)
@@ -152,29 +160,37 @@ def find(item)
     return res
 end
 
+# for legacy
 def normalize(event)
-      event.set("net", JSON.parse(net))
-      event.get("[records][properties]").each {|k, v| event.set(k, v) }
-      event.remove("[records]")
-      event.remove("[message]")
-      return event
+    event.set("net", JSON.parse(net))
+    event.get("[records][properties]").each {|k, v| event.set(k, v) }
+    event.remove("[records]")
+    event.remove("[message]")
+    return event
+end
+
+def replant(event, newroot)
+    @logger.debug("event: #{event.get(newroot)}")
+    event.get(newroot).each {|k, v| event.set(k, v) }
+    event.remove(@roottostrip)
+    return event
 end
 
 # From https://github.com/angel9484/logstash-filter-lookup
-  def json_loader(data)
+def json_loader(data)
     get_map.merge!(JSON.parse(File.read(data)))
-  end
+end
 
-  def csv_loader(data)
+def csv_loader(data)
     data = CSV.read(data).inject(Hash.new) do |acc, v|
       acc[v[0]] = v[1]
       acc
     end
     get_map.merge!(data)
-  end
+end
 
-  def yml_loader(data)
+def yml_loader(data)
     get_map.merge!(YAML.load_file(data))
-  end
+end
 
 end # class LogStash::Filters::Lookup
