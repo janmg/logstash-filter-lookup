@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-filter-weblookup'
-  s.version       = '0.1.0'
+  s.version       = '0.1.1'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'This logstash filter plugin takes one or more fields and enriches with a lookup value from a list, redis cache or webservice'
   s.description   = <<-EOF
