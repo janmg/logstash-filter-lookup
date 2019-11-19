@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name          = 'logstash-filter-weblookup'
-  s.version       = '0.1.1'
+  s.version       = '0.1.2'
   s.licenses      = ['Apache-2.0']
   s.summary       = 'This logstash filter plugin takes one or more fields and enriches with a lookup value from a list, redis cache or webservice'
   s.description   = <<-EOF
@@ -20,7 +20,7 @@ EOF
   s.metadata = { "logstash_plugin" => "true", "logstash_group" => "filter" }
 
   # Gem dependencies
-  s.add_runtime_dependency 'logstash-core-plugin-api', '~> 2.0'
+  s.add_runtime_dependency 'logstash-core-plugin-api', '~> 2.1'
   s.add_runtime_dependency 'connection_pool', '~> 2.2'
   #s.add_runtime_dependency 'addressable', '~> 2.3.8'
   s.add_development_dependency 'logstash-devutils', '~> 0'

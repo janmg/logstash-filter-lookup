@@ -108,8 +108,12 @@ def filter(event)
     else
         fields.each_with_index do |field, index|
             # @logger.info(event.get("["+field+"]"))
-            json = parse(event.get(field).to_s)
-            event.set("["+destinations[index]+"]", json)
+            begin
+             json = parse(event.get(field).to_s)
+             event.set("["+destinations[index]+"]", json)
+            rescue Exception => e
+             @logger.error(" caught: #{e.message}")
+            end 
         end
     end
     if @normalize
@@ -127,16 +131,18 @@ def parse(field)
     begin
         json = JSON.parse(x)
     rescue JSON::ParserError
-        json = x
-    end			
+        json = JSON.parse("{\"ip\": \""+field+"\"}")
+    end
+    # @logger.info("json parse option for field #{field} / #{json}")
 end
 
 def find(item)
-    res = nil
-    # Is item in list? (list is an optional hash)
-    unless list.nil? 
-        return list[item]
-    end
+    res = "{}"
+    # Is item in list? (list is an optional array)
+    #unless list.nil? 
+        # What if the list exists, but item is not on the list?
+    #    return list[item]
+    #end
     # Is item in redis?
     unless @red.nil?
         res = @red.get(item)
@@ -150,7 +156,11 @@ def find(item)
     current_uri.query_values = @params.merge({@ip => item})
     #logger.info(@uri.to_s)
     @connpool.with do |conn|
-        res = conn.request_get(current_uri).read_body
+        http_response = conn.request_get(current_uri)
+	res = http_response.read_body if http_response.is_a?(Net::HTTPSuccess)
+	if res.eql? "null"
+            res = "{}"
+        end
 	#logger.info(res.to_s)
         unless @red.nil?
             @red.set(item, res)
@@ -193,4 +203,4 @@ def yml_loader(data)
     get_map.merge!(YAML.load_file(data))
 end
 
-end # class LogStash::Filters::Lookup
+end
