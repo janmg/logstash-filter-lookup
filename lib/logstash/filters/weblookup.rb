@@ -130,7 +130,7 @@ def parse(field)
     x = find(field)
     begin
         json = JSON.parse(x)
-    rescue JSON::ParserError
+    rescue
         json = JSON.parse("{\"ip\": \""+field+"\"}")
     end
     # @logger.info("json parse option for field #{field} / #{json}")
@@ -171,19 +171,22 @@ def find(item)
 end
 
 # for legacy
-def normalize(event)
-    event.set("net", JSON.parse(net))
-    event.get("[records][properties]").each {|k, v| event.set(k, v) }
-    event.remove("[records]")
-    event.remove("[message]")
-    return event
-end
+#def normalize(event)
+#    event.set("net", JSON.parse(net))
+#    event.get("[records][properties]").each {|k, v| event.set(k, v) }
+#    event.remove("[records]")
+#    event.remove("[message]")
+#    return event
+#end
 
 def replant(event, newroot)
-    @logger.debug("event: #{event.get(newroot)}")
-    event.get(newroot).each {|k, v| event.set(k, v) }
-    event.remove(@roottostrip)
-    return event
+    begin
+      @logger.debug("event: #{event.get(newroot)}")
+      event.get(newroot).each {|k, v| event.set(k, v) }
+      event.remove(@roottostrip)
+    rescue Exception => e
+      @logger.info("event failed")
+    end
 end
 
 # From https://github.com/angel9484/logstash-filter-lookup
