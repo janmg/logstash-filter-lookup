@@ -1,3 +1,6 @@
+## 0.1.4
+  - Attempt to continue gracefully if either source or destination is empty
+
 ## 0.1.3
   - Slightly better rescue handling when json parsing or replanting fails
 

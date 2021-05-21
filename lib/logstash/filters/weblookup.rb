@@ -66,7 +66,7 @@ def register
     @is_one_destination=false
     if destinations.size == 1
         @logger.info("one destination found, it is #{destinations[0]}")
-	@is_one_destination=true
+    @is_one_destination=true
     else
         if destinations.size != fields.size
             @logger.error("Configuration error, there must be an equal amount of destinations and fields, defaulting to using the field as a root for the new values. e.g. if the lookup is done on the value of [\"ClientIP\"] the destination will be [\"ClientIP\"][\"Key\"]")
@@ -86,8 +86,8 @@ def register
     @params.each do |key, value|
         if value == "\<item\>" 
             @ip=key
-	    @params.delete(key)
-	    logger.info("the ip key in the uri is #{@ip}")
+        @params.delete(key)
+        logger.info("the ip key in the uri is #{@ip}")
         end
     end
     @connpool = ConnectionPool.new(size: 4, timeout: 180) { 
@@ -98,21 +98,25 @@ end # def register
 def filter(event)
     if destinations[0] == "srcdst"
         # ... do special sauce
-        src = parse(event.get(fields[0]).to_s)
-	dst = parse(event.get(fields[1]).to_s)
-        srcdst = { :srcnet => src["netname"], :srchost => src["hostname"], :dstnet => dst["netname"], :dsthost => dst["hostname"] }
-        event.set("srcdst", srcdst)
-        event.get("[srcdst]").each {|k, v| event.set(k, v) }
-        event.remove("[srcdst]")
-	@logger.trace("processed: #{event.get(fields[0]).to_s} #{src} #{event.get(fields[1]).to_s} #{dst} #{srcdst}")
+        begin
+            src = parse(event.get(fields[0]).to_s)
+            dst = parse(event.get(fields[1]).to_s)
+            srcdst = { :srcnet => src["netname"], :srchost => src["hostname"], :dstnet => dst["netname"], :dsthost => dst["hostname"] }
+            event.set("srcdst", srcdst)
+            event.get("[srcdst]").each {|k, v| event.set(k, v) }
+            event.remove("[srcdst]")
+            @logger.trace("processed: #{event.get(fields[0]).to_s} #{src} #{event.get(fields[1]).to_s} #{dst} #{srcdst}")
+        rescue Exception => e
+            @logger.error(" caught: #{e.message}")
+        end
     else
         fields.each_with_index do |field, index|
-            # @logger.info(event.get("["+field+"]"))
+        # @logger.info(event.get("["+field+"]"))
             begin
-             json = parse(event.get(field).to_s)
-             event.set("["+destinations[index]+"]", json)
+                json = parse(event.get(field).to_s)
+                event.set("["+destinations[index]+"]", json)
             rescue Exception => e
-             @logger.error(" caught: #{e.message}")
+                @logger.error(" caught: #{e.message}")
             end 
         end
     end
@@ -146,7 +150,7 @@ def find(item)
     # Is item in redis?
     unless @red.nil?
         res = @red.get(item)
-	unless res.nil?
+    unless res.nil?
             return res
         end
     end
@@ -157,11 +161,11 @@ def find(item)
     #logger.info(@uri.to_s)
     @connpool.with do |conn|
         http_response = conn.request_get(current_uri)
-	res = http_response.read_body if http_response.is_a?(Net::HTTPSuccess)
-	if res.eql? "null"
+    res = http_response.read_body if http_response.is_a?(Net::HTTPSuccess)
+    if res.eql? "null"
             res = "{}"
         end
-	#logger.info(res.to_s)
+    #logger.info(res.to_s)
         unless @red.nil?
             @red.set(item, res)
             @red.expire(item,redis_expiry)
